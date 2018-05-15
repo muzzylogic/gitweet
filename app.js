@@ -52,56 +52,64 @@ var bearer_token = 		config.request.twitter.bearer_token;
 
 
 async function main(){
-	configObj = config;
-	reqDetails = new RequestDetails(config.request);
-	console.log(reqDetails.search);
-
-
 	//call github 
 	//do twitter auth 	
-	
 	//wait for both to complete
-	let [gitRes, bearer] = await Promise.all([githubSearch(), twitterAuth()]);
+	let [gitRes, bearer] = await Promise.all([githubSearch().catch(function(err){
+		return console.log(error);
+	}), twitterAuth().catch(function(error){
+		console.log(error);
+	})]);
 	console.log("json response is "+gitRes+" token is "+ bearer);
-
-	for(var i = 0; i < 10; i++){
-		console.log("Item "+i+" is "+gitRes.items[i].name);
-		console.log("with description: \n"+gitRes.items[i].description)
-
-		
-	}
 	//call twitter search for each project 
-
-	//wait for results 
-
+	var projectTweets = [];
+	for(var i = 0; i < gitRes.length; i++){
+		//make this a blocking call to avoid rate limiting
+		let res = await twitterSearch(gitRes[i]).catch(function(error){
+			console.log(error);
+		});
+		projectTweets.push(res);
+	} 
 	//output results
-
-/*
-	var fullUrl = githubbaseurl+searchRoute+"?q="+searchTerm+"&sort="+searchSort; 
-	var options = {
-		url: fullUrl, 
-		headers: {
-			'User-Agent': 'muzzylogic'
-		}
-	}
-	console.log("full url is " + fullUrl);
-	request(options, (err, res, body) => {
-		if(err) { return console.log(err);}
-
-		console.log('handling response');
-		var json = JSON.parse(body);
-		//console.log(json.items[1].name);
-		var filtered = gitRepsonseParse(json);
-		console.log("secret is "+CONSUMER_SECRET);
-		twitterGenerateBearer();
-		
-
-	});
-
-	console.log("main has continued");
-*/
+	await outputResults(gitRes, projectTweets);
+	console.log("finished");
 }
 
+async function outputResults(gitRes, projectTweets){
+	
+
+	console.log(JSON.stringify(projectTweets[0]));
+	var out = [];
+
+	for(var i = 0; i < gitRes.length; i++){
+		out.push(
+			{	name: gitRes[i].name, 
+				description : gitRes[i].description,
+				tweets: (function(){
+					var t = [];
+					for(var j = 0; j < projectTweets[i].statuses.length; j++){
+						t.push(projectTweets[i].statuses[j].text);
+					}
+					return t;
+				})()
+			}
+		);
+	}
+
+	 	fs.exists('output.json', function(exists){
+		if(exists){
+			 fs.writeFile("output.json", JSON.stringify(out));
+		}
+		else{
+			console.log("config file not found, could not save");
+			process.exit();
+		}
+	});
+}
+
+
+
+/***  github  ****/
 async function githubSearch(){
 	var fullUrl = githubbaseurl+searchRoute+"?q="+searchTerm+"&sort="+searchSort; 
 	var options = {
@@ -126,8 +134,6 @@ async function githubSearch(){
 }
 
 function gitRepsonseParse(json){
-	//print out the first 10 
-	//todo filter out unwanted terms from description 
 	var filtered = [];
 
 	for(var i = 0; i < 10; i++){
@@ -141,6 +147,8 @@ function gitRepsonseParse(json){
 
 }
 
+
+/***  twitter   ****/
 async function twitterAuth(){
 	let token = config.request.twitter.bearer_token;
 	if(token == ""){
@@ -194,6 +202,30 @@ async function twitterGenerateBearer(){
 	return token.access_token;
 }
 
+async function twitterSearch(gitProject){
+	var access_token = config.request.twitter.bearer_token;
+	var twitter_api = 'https://api.twitter.com/1.1/search/tweets.json';
+	var query = encodeURI(gitProject.name);
+	console.log("requesting timeline with bearer: "+ access_token);
+	var options = {
+	    method: 'GET',
+	    url: twitter_api,
+	    qs: {
+	        "q": query
+	    },
+	    json: true,
+	    headers: {
+	        "Authorization": "Bearer " + access_token
+	    }
+	};
+
+	let response = await request(options).then(function(body){
+		return body; //body.statuses[].text
+	}).catch(function(error){
+		return console.log(error);
+	});
+	return response;
+}
 
 async function saveConfig(){
 	configString = JSON.stringify(config);
@@ -209,43 +241,7 @@ async function saveConfig(){
 
 }
 
-function twitterSearch(token){
-	var access_token = JSON.parse(token).access_token
-	var twitter_api = 'https://api.twitter.com/1.1/search/tweets.json';
-	console.log("requesting timeline with bearer: "+ access_token);
-	var options = {
-	    method: 'GET',
-	    url: twitter_api,
-	    qs: {
-	        "screen_name": "muzzylogic"
-	    },
-	    json: true,
-	    headers: {
-	        "Authorization": "Bearer " + access_token
-	    }
-	};
 
-	request(options, (err, res, body) =>  {
-		console.log(body);
-
-	});
-}
 
 
 main();
-
-
-function RequestDetails(req){
-	this.search = req.search;
-}
-
-//module.exports = RequestDetails;
-
-/*const express = require('express');
-
-const app = express();
-
-app.get('/', (req, res) => res.send('Hello World!'));
-
-app.listen(3000, () => console.log('Running App on port 3000'));
-*/
