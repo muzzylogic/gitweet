@@ -13,12 +13,23 @@
  possibly look at ways to install as a package without putting on the public npm
  */
 
+/*
+ * application flow 
+ -> call github api and do search
+ -> based on search get 10 projects
+ -> perform search in twitter for each project and parse results asynchronously 
+ -> add results to array of results for parsing and sorting 
+ -> main thread waits until all calls are complete (retry on rate limiting)
+ -> parse and sort results
+ -> output results in designated format 
+*/
+
 //includes 
 const request = require('request');
+const fs = require('fs');
 
 
-
-//const config = require("./config.json");
+const config = require("./config.json");
 const githubTwitterAPI = require("./githubtwitterAPI")
 
 //let serverConfig = config.server
@@ -27,19 +38,37 @@ const githubTwitterAPI = require("./githubtwitterAPI")
 
 var searchTerm = "football"
 
-var githubbaseurl = "https://api.github.com"
-var searchRoute = "/search/repositories"
-
+const githubbaseurl = "https://api.github.com"
+const searchRoute = "/search/repositories"
 var searchSort = "stars";
 
 
+
+
 //TWITTER
-var CONSUMER_SECRET = "";
-var CONSUMER_KEY = ""; 
-var bearer_token;
+var CONSUMER_SECRET = 		config.request.twitter.consumerkey;
+var CONSUMER_KEY = 			config.request.twitter.consumersecret;
+var bearer_token; = 		config.request.twitter.bearer_token;
 
 
-function main(){
+async function main(){
+	configObj = config;
+	reqDetails = new RequestDetails(config.request);
+	console.log(reqDetails.search);
+
+
+	//call github 
+	//do twitter auth 	
+	
+	//wait for both to complete
+	let [gitRes, bearer] = await Promise.all([githubSearch(), twitterAuth()]);
+	//call twitter search for each project 
+
+	//wait for results 
+
+	//output results
+
+
 	var fullUrl = githubbaseurl+searchRoute+"?q="+searchTerm+"&sort="+searchSort; 
 	var options = {
 		url: fullUrl, 
@@ -54,8 +83,9 @@ function main(){
 		console.log('handling response');
 		var json = JSON.parse(body);
 		//console.log(json.items[1].name);
-		//var filtered = gitRepsonseHandle(json);
-		twitterGenerateBearer(CONSUMER_SECRET, CONSUMER_KEY);
+		var filtered = gitRepsonseParse(json);
+		console.log("secret is "+CONSUMER_SECRET);
+		twitterGenerateBearer();
 		
 
 	});
@@ -66,7 +96,7 @@ function main(){
 
 
 
-function gitRepsonseHandle(json){
+function gitRepsonseParse(json){
 	//print out the first 10 
 	//todo filter out unwanted terms from description 
 	var filtered = [];
@@ -82,8 +112,40 @@ function gitRepsonseHandle(json){
 
 }
 
-function twitterGenerateBearer(secret, key){
-	var encoded = new Buffer(key + ':'+secret).toString('base64');
+async function twitterAuth(){
+	let token = config.request.twitter.bearer_token;
+	if(token == ""){
+		token = await twitterGenerateBearer();
+		config.request.twitter.bearer_token = token; 
+		saveConfig();
+	}
+	else{
+		var options = {
+		    method: 'GET',
+		    url: "https://api.twitter.com/1.1/account/verify_credentials.json",
+		    headers: {
+		        "Authorization": "Bearer " + access_token
+		    }
+		};
+		let validToken = await request(options, (err, res, body) => {
+			if(err){
+				return false;
+			}	
+			return true;
+		});
+
+		if(!validToken){
+			token = await twitterGenerateBearer();
+			saveConfig();
+		}
+
+	}
+	return token;
+	
+}
+
+async function twitterGenerateBearer(){
+	var encoded = new Buffer(CONSUMER_KEY + ':' + CONSUMER_SECRET).toString('base64');
 	console.log("encoded is: "+ encoded);
 	var options = {
 	    url: 'https://api.twitter.com/oauth2/token',
@@ -93,28 +155,43 @@ function twitterGenerateBearer(secret, key){
 	    body: 'grant_type=client_credentials'
 	};
 
-	request.post(options, function(err, response, body) {
+	let token = await request.post(options, function(err, response, body) {
      if(err) { return console.log(err);}
 
-     bearer_token = body; 
-	 console.log("Bearer Token: " + bearer_token);
-	 twitterSearch(bearer_token);
+     bearer_token = JSON.parse(body).access_token; 
+	 return bearer_token;
 	});
+	return token;
 }
 
 
-function twitterSearch(token){
-	var twitter_api = 'https://api.twitter.com/1.1/statuses/user_timeline.json';
+async function saveConfig(){
+	configString = JSON.stringify(config);
+	fs.exists('config.json', function(exists){
+		if(exists){
+			fs.writeFile("config.json", configString);
+		}
+		else{
+			console.log("config file not found, could not save");
+			process.exit();
+		}
+	}
 
+}
+
+function twitterSearch(token){
+	var access_token = JSON.parse(token).access_token
+	var twitter_api = 'https://api.twitter.com/1.1/search/tweets.json';
+	console.log("requesting timeline with bearer: "+ access_token);
 	var options = {
 	    method: 'GET',
 	    url: twitter_api,
 	    qs: {
-	        "screen_name": "twitterapi"
+	        "screen_name": "muzzylogic"
 	    },
 	    json: true,
 	    headers: {
-	        "Authorization": "Bearer " + bearer_token
+	        "Authorization": "Bearer " + access_token
 	    }
 	};
 
@@ -127,6 +204,12 @@ function twitterSearch(token){
 
 main();
 
+
+function RequestDetails(req){
+	this.search = req.search;
+}
+
+//module.exports = RequestDetails;
 
 /*const express = require('express');
 
