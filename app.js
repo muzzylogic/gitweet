@@ -25,7 +25,7 @@
 */
 
 //includes 
-const request = require('request');
+const request = require('request-promise');
 const fs = require('fs');
 
 
@@ -46,9 +46,9 @@ var searchSort = "stars";
 
 
 //TWITTER
-var CONSUMER_SECRET = 		config.request.twitter.consumerkey;
-var CONSUMER_KEY = 			config.request.twitter.consumersecret;
-var bearer_token; = 		config.request.twitter.bearer_token;
+var CONSUMER_SECRET = 		config.request.twitter.consumersecret;
+var CONSUMER_KEY = 			config.request.twitter.consumerkey;
+var bearer_token = 		config.request.twitter.bearer_token;
 
 
 async function main(){
@@ -62,13 +62,21 @@ async function main(){
 	
 	//wait for both to complete
 	let [gitRes, bearer] = await Promise.all([githubSearch(), twitterAuth()]);
+	console.log("json response is "+gitRes+" token is "+ bearer);
+
+	for(var i = 0; i < 10; i++){
+		console.log("Item "+i+" is "+gitRes.items[i].name);
+		console.log("with description: \n"+gitRes.items[i].description)
+
+		
+	}
 	//call twitter search for each project 
 
 	//wait for results 
 
 	//output results
 
-
+/*
 	var fullUrl = githubbaseurl+searchRoute+"?q="+searchTerm+"&sort="+searchSort; 
 	var options = {
 		url: fullUrl, 
@@ -91,10 +99,31 @@ async function main(){
 	});
 
 	console.log("main has continued");
-
+*/
 }
 
+async function githubSearch(){
+	var fullUrl = githubbaseurl+searchRoute+"?q="+searchTerm+"&sort="+searchSort; 
+	var options = {
+		url: fullUrl, 
+		headers: {
+			'User-Agent': 'muzzylogic'
+		}
+	}
+	console.log("full url is " + fullUrl);
+	let resJson = await request(options).then(function(body){
+		console.log('handling response');
+		var json = JSON.parse(body);
+		let filtered = gitRepsonseParse(json);
+		console.log("secret is "+CONSUMER_SECRET);
+		return filtered;
 
+	}).catch(function(err){
+		return console.log(err);
+	});
+	console.log("filtered json is"+ JSON.stringify(resJson));
+	return resJson;
+}
 
 function gitRepsonseParse(json){
 	//print out the first 10 
@@ -124,14 +153,14 @@ async function twitterAuth(){
 		    method: 'GET',
 		    url: "https://api.twitter.com/1.1/account/verify_credentials.json",
 		    headers: {
-		        "Authorization": "Bearer " + access_token
+		        "Authorization": "Bearer " + token
 		    }
 		};
-		let validToken = await request(options, (err, res, body) => {
-			if(err){
-				return false;
-			}	
+		let validToken = await request(options).then(function(body){
+			
 			return true;
+		}).catch(function(err){
+			return false;
 		});
 
 		if(!validToken){
@@ -155,13 +184,14 @@ async function twitterGenerateBearer(){
 	    body: 'grant_type=client_credentials'
 	};
 
-	let token = await request.post(options, function(err, response, body) {
-     if(err) { return console.log(err);}
-
-     bearer_token = JSON.parse(body).access_token; 
+	let token = await request.post(options).then(function(body) {
+	console.log("body is "+body);
+     bearer_token = JSON.parse(body); 
 	 return bearer_token;
+	}).catch(function(err){
+		return console.log(err);
 	});
-	return token;
+	return token.access_token;
 }
 
 
@@ -175,7 +205,7 @@ async function saveConfig(){
 			console.log("config file not found, could not save");
 			process.exit();
 		}
-	}
+	});
 
 }
 
