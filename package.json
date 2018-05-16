@@ -2,14 +2,15 @@
   "name": "sportdec_fullstack_james_daly",
   "version": "0.0.1",
   "description": "Full Stack interview task for SportDec",
-  "main": "app.js",
+  "main": "gitweet.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "node gitweet.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "James Daly",
   "license": "ISC",
   "dependencies": {
+    "argparse": "^1.0.10",
     "request": "^2.85.0",
     "request-promise": "^4.2.2"
   }

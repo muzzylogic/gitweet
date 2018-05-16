@@ -27,11 +27,12 @@
 //includes 
 const request = require('request-promise');
 const fs = require('fs');
+const ArgumentParser  = require('argparse').ArgumentParser;
 
 
 const config = require("./config.json");
-const githubTwitterAPI = require("./githubtwitterAPI")
-
+let parser = {};
+let outputFile = "";
 //let serverConfig = config.server
 //let request = config.request
 
@@ -42,25 +43,26 @@ const githubbaseurl = "https://api.github.com"
 const searchRoute = "/search/repositories"
 var searchSort = "stars";
 
-
-
-
-//TWITTER
 var CONSUMER_SECRET = 		config.request.twitter.consumersecret;
 var CONSUMER_KEY = 			config.request.twitter.consumerkey;
 var bearer_token = 		config.request.twitter.bearer_token;
 
 
+
+
 async function main(){
+	addArgs();
+	outputFile = parser.parseArgs().output;
+	config.request.search = parser.parseArgs().search;
 	//call github 
 	//do twitter auth 	
 	//wait for both to complete
-	let [gitRes, bearer] = await Promise.all([githubSearch().catch(function(err){
+	let [gitRes, be6arer] = await Promise.all([githubSearch().catch(function(err){
 		return console.log(error);
 	}), twitterAuth().catch(function(error){
 		console.log(error);
 	})]);
-	console.log("json response is "+gitRes+" token is "+ bearer);
+	//console.log("json response is "+gitRes+" token is "+ bearer);
 	//call twitter search for each project 
 	var projectTweets = [];
 	for(var i = 0; i < gitRes.length; i++){
@@ -72,13 +74,32 @@ async function main(){
 	} 
 	//output results
 	await outputResults(gitRes, projectTweets);
-	console.log("finished");
+}
+
+function addArgs(){
+	parser = new ArgumentParser({
+		version : '0.0.1',
+		addHelp: true,
+		description: 'command line api to search github projects and output relevant tweets to those projects'
+	});
+
+	parser.addArgument(
+		['-o', '--output'],
+		{ help: "set the output file to write the results, default is output.json",
+		  defaultValue: "output.json"
+		}
+	);
+	parser.addArgument(
+		['-s', '--search'],
+		{
+			help: "set the search string, default is football",
+			defaultValue: "football"
+		}
+	)
 }
 
 async function outputResults(gitRes, projectTweets){
 	
-
-	console.log(JSON.stringify(projectTweets[0]));
 	var out = [];
 
 	for(var i = 0; i < gitRes.length; i++){
@@ -96,15 +117,10 @@ async function outputResults(gitRes, projectTweets){
 		);
 	}
 
-	 	fs.exists('output.json', function(exists){
-		if(exists){
-			 fs.writeFile("output.json", JSON.stringify(out));
-		}
-		else{
-			console.log("config file not found, could not save");
-			process.exit();
-		}
+	fs.writeFile(outputFile, JSON.stringify(out, null, 2), function(err){
+		console.log(err);
 	});
+		
 }
 
 
@@ -118,28 +134,28 @@ async function githubSearch(){
 			'User-Agent': 'muzzylogic'
 		}
 	}
-	console.log("full url is " + fullUrl);
+	//console.log("full url is " + fullUrl);
 	let resJson = await request(options).then(function(body){
-		console.log('handling response');
+		//console.log('handling response');
 		var json = JSON.parse(body);
 		let filtered = gitRepsonseParse(json);
-		console.log("secret is "+CONSUMER_SECRET);
+		//console.log("secret is "+CONSUMER_SECRET);
 		return filtered;
 
 	}).catch(function(err){
 		return console.log(err);
 	});
-	console.log("filtered json is"+ JSON.stringify(resJson));
+	//console.log("filtered json is"+ JSON.stringify(resJson));
 	return resJson;
 }
 
 function gitRepsonseParse(json){
 	var filtered = [];
 
-	for(var i = 0; i < 10; i++){
-		console.log("Item "+i+" is "+json.items[i].name);
-		console.log("with description: \n"+json.items[i].description)
-
+	for(var i = 0; i < config.request.maxprojects; i++){
+		if(i > json.length){
+			break;
+		}
 		filtered.push(json.items[i]);
 	}
 
@@ -183,7 +199,7 @@ async function twitterAuth(){
 
 async function twitterGenerateBearer(){
 	var encoded = new Buffer(CONSUMER_KEY + ':' + CONSUMER_SECRET).toString('base64');
-	console.log("encoded is: "+ encoded);
+	//console.log("encoded is: "+ encoded);
 	var options = {
 	    url: 'https://api.twitter.com/oauth2/token',
 	    headers: {
@@ -193,7 +209,6 @@ async function twitterGenerateBearer(){
 	};
 
 	let token = await request.post(options).then(function(body) {
-	console.log("body is "+body);
      bearer_token = JSON.parse(body); 
 	 return bearer_token;
 	}).catch(function(err){
@@ -206,7 +221,7 @@ async function twitterSearch(gitProject){
 	var access_token = config.request.twitter.bearer_token;
 	var twitter_api = 'https://api.twitter.com/1.1/search/tweets.json';
 	var query = encodeURI(gitProject.name);
-	console.log("requesting timeline with bearer: "+ access_token);
+	//console.log("requesting timeline with bearer: "+ access_token);
 	var options = {
 	    method: 'GET',
 	    url: twitter_api,
@@ -228,15 +243,19 @@ async function twitterSearch(gitProject){
 }
 
 async function saveConfig(){
-	configString = JSON.stringify(config);
+	configString = JSON.stringify(config, null, 2);
 	fs.exists('config.json', function(exists){
 		if(exists){
-			fs.writeFile("config.json", configString);
+			fs.writeFile("config.json", configString, function(err){
+				console.log(err);
+			});
 		}
 		else{
 			console.log("config file not found, could not save");
 			process.exit();
 		}
+	}, function(err){
+		console.log(err);
 	});
 
 }
