@@ -1,5 +1,11 @@
 ## Git Project and Tweet Search 
 
+# Description
+    Command line api to search github projects and output relevant tweets in json format
+
+# Prerequisites 
+- Nodejs version 8.0.0 or greater installed 
+
 # Usage 
 - Create your twitter application [https://apps.twitter.com/]
 - Generate your Consumer key and Consumer Secret 
@@ -10,5 +16,14 @@
     node gitweet 
 - To see the list of available args use 
     node gitweet -h
+
+## args 
+    -h, --help            Show this help message and exit.
+    -v, --version         Show program's version number and exit.
+    -o OUTPUT, --output OUTPUT
+                        set the output file to write the results, default is
+                        output.json
+    -s SEARCH, --search SEARCH
+                        set the search string, default is football
 
 

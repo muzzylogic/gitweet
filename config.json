@@ -1,0 +1,12 @@
+{
+  "request": {
+    "search": "football",
+    "githubSearchSort": "stars",
+    "maxprojects": 10,
+    "twitter": {
+      "consumerkey": "",
+      "consumersecret": "",
+      "bearer_token": ""
+    }
+  }
+}
